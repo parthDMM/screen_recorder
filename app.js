@@ -635,24 +635,30 @@ async function finalizeRecording() {
   };
 
   state.currentRecording = recording;
-  await remuxRecordingIfNeeded(recording);
+  const readyForDownload = await ensureSeekableDownload(recording);
   log('Packaging recording files into a ZIP archive...', 'warn');
 
-  try {
-    await rebuildPackage(recording);
-  } catch (error) {
-    log(error.message || 'ZIP package could not be created.', 'bad');
+  if (readyForDownload) {
+    try {
+      await rebuildPackage(recording);
+    } catch (error) {
+      recording.downloadReady = false;
+      log(error.message || 'ZIP package could not be created.', 'bad');
+    }
+  } else {
+    recording.downloadReady = false;
+    log('Download/export is disabled until a seekable MP4 can be created. Start CaptureDesk with server.py and record again.', 'bad');
   }
 
   attachRecordingToPlayer(recording);
   renderTranscript(recording);
   renderFileList(recording);
   resetAfterFinalize();
-  els.downloadBtn.disabled = !recording.zipUrl;
-  els.transcribeBtn.disabled = !recording.blob;
+  els.downloadBtn.disabled = !recording.downloadReady || !recording.zipUrl;
+  els.transcribeBtn.disabled = !recording.downloadReady || !recording.blob;
   els.copyTranscriptBtn.disabled = !getTranscriptText(recording);
   els.downloadTranscriptBtn.disabled = !getTranscriptText(recording);
-  els.packageStat.textContent = recording.zipBlob ? formatBytes(recording.zipBlob.size) : 'Video only';
+  els.packageStat.textContent = recording.zipBlob ? formatBytes(recording.zipBlob.size) : 'Needs seekable remux';
   els.outputLine.textContent = `${videoName} - ${formatBytes(blob.size)} - ${formatTime(durationSeconds)}`;
   log(`Recording ready: ${videoName}`, 'good');
 }
@@ -715,6 +721,18 @@ function seekPlayer(value) {
 }
 
 function renderFileList(recording) {
+  if (!recording.downloadReady) {
+    els.fileList.innerHTML = `
+      <div class="file-item">
+        <div>
+          <strong>Download blocked</strong>
+          <div class="file-meta">The MP4 is still stream-style. Restart with server.py so CaptureDesk can create a seekable MP4 before export.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   const files = [
     recording.zipUrl ? {
       label: 'ZIP package',
@@ -740,17 +758,24 @@ function renderFileList(recording) {
   `).join('');
 }
 
-async function remuxRecordingIfNeeded(recording) {
+async function ensureSeekableDownload(recording) {
   const isMp4 = recording.mimeType.includes('mp4') || recording.extension === 'mp4';
 
   if (!isMp4) {
+    recording.downloadReady = true;
     log('Browser did not produce MP4, so seekable MP4 remux was skipped.', 'warn');
-    return;
+    return true;
   }
 
   if (!state.backend.available || !state.backend.remuxAvailable) {
-    log('Seekable MP4 remux backend is unavailable. The browser preview may behave like a stream.', 'warn');
-    return;
+    await checkBackend();
+  }
+
+  if (!state.backend.available || !state.backend.remuxAvailable) {
+    recording.downloadReady = false;
+    recording.seekableRemux = false;
+    log('Seekable MP4 remux backend is unavailable. The page preview can seek, but downloaded MP4 would behave like a stream.', 'bad');
+    return false;
   }
 
   try {
@@ -782,10 +807,14 @@ async function remuxRecordingIfNeeded(recording) {
     recording.extension = 'mp4';
     recording.sizeBytes = fixedBlob.size;
     recording.seekableRemux = true;
+    recording.downloadReady = true;
     log('Seekable MP4 timeline created.', 'good');
+    return true;
   } catch (error) {
     recording.seekableRemux = false;
-    log(error.message || 'Seekable MP4 remux failed. Exporting the original recording.', 'bad');
+    recording.downloadReady = false;
+    log(error.message || 'Seekable MP4 remux failed. Export was blocked to avoid another stream-style download.', 'bad');
+    return false;
   }
 }
 
