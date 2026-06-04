@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CaptureDesk Recorder</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">CD</div>
+        <div>
+          <div class="brand-name">CaptureDesk Recorder</div>
+          <div class="brand-sub">Screen, audio, transcript, and export workspace</div>
+        </div>
+      </div>
+      <div class="status-strip">
+        <span class="status-chip" id="backendChip">Transcript backend offline</span>
+        <span class="status-chip" id="formatChip">Format checking</span>
+        <span class="timer" id="timer">00:00</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="studio-panel">
+        <div class="panel-head">
+          <div>
+            <h1>Recording studio</h1>
+            <p id="sessionLine">Share a screen source to start a capture session.</p>
+          </div>
+          <div class="record-state" id="recordState">
+            <span class="record-dot"></span>
+            <span id="recordStateText">Idle</span>
+          </div>
+        </div>
+
+        <div class="preview-frame" id="previewFrame">
+          <video id="previewVideo" autoplay muted playsinline></video>
+          <div class="preview-empty" id="previewEmpty">
+            <strong>No screen source selected</strong>
+            <span>Choose a tab, window, or display before recording.</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="primary" id="shareBtn" type="button">Share screen</button>
+          <button class="success" id="recordBtn" type="button" disabled>Start recording</button>
+          <button id="pauseBtn" type="button" disabled>Pause</button>
+          <button id="resumeBtn" type="button" disabled>Resume</button>
+          <button class="danger" id="stopBtn" type="button" disabled>Stop</button>
+          <button id="downloadBtn" type="button" disabled>Download ZIP</button>
+          <button id="transcribeBtn" type="button" disabled>Transcribe</button>
+        </div>
+      </section>
+
+      <aside class="settings-panel">
+        <section class="settings-section">
+          <h2>Sources</h2>
+          <label for="micSelect">Microphone</label>
+          <select id="micSelect"></select>
+
+          <div class="switch-row">
+            <span>Record microphone</span>
+            <input id="recordMic" type="checkbox" checked />
+          </div>
+          <div class="switch-row">
+            <span>Record system audio</span>
+            <input id="recordSystemAudio" type="checkbox" checked />
+          </div>
+          <div class="switch-row">
+            <span>Input event log</span>
+            <input id="captureInputs" type="checkbox" checked />
+          </div>
+          <div class="switch-row">
+            <span>Redact printable keys</span>
+            <input id="redactKeys" type="checkbox" checked />
+          </div>
+          <div class="switch-row">
+            <span>Live draft transcript</span>
+            <input id="liveTranscript" type="checkbox" checked />
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2>Quality</h2>
+          <label for="qualitySelect">Video quality</label>
+          <select id="qualitySelect">
+            <option value="3500000">Standard</option>
+            <option value="6500000" selected>High</option>
+            <option value="10000000">Archive</option>
+          </select>
+
+          <label for="frameRateSelect">Frame rate</label>
+          <select id="frameRateSelect">
+            <option value="24">24 FPS</option>
+            <option value="30" selected>30 FPS</option>
+            <option value="60">60 FPS</option>
+          </select>
+
+          <label for="transcriptModel">Transcript model</label>
+          <select id="transcriptModel">
+            <option value="tiny" selected>Local Whisper Tiny</option>
+            <option value="base">Local Whisper Base</option>
+            <option value="small">Local Whisper Small</option>
+            <option value="medium">Local Whisper Medium</option>
+          </select>
+        </section>
+
+        <section class="settings-section">
+          <h2>Diagnostics</h2>
+          <div class="stats">
+            <div class="stat"><span>Screen</span><strong id="screenStat">Not shared</strong></div>
+            <div class="stat"><span>Recorder</span><strong id="recorderStat">Idle</strong></div>
+            <div class="stat"><span>Audio</span><strong id="audioStat">Waiting</strong></div>
+            <div class="stat"><span>Frames</span><strong id="frameStat">0</strong></div>
+            <div class="stat"><span>Input events</span><strong id="inputStat">0</strong></div>
+            <div class="stat"><span>Package</span><strong id="packageStat">Not ready</strong></div>
+          </div>
+          <label>Microphone level</label>
+          <div class="meter"><div id="micMeter"></div></div>
+        </section>
+      </aside>
+
+      <section class="workspace-panel">
+        <div class="panel-head compact">
+          <div>
+            <h2>Recording output</h2>
+            <p id="outputLine">Recordings and transcript files appear here.</p>
+          </div>
+          <button id="clearBtn" type="button">Clear</button>
+        </div>
+
+        <div class="output-grid">
+          <section class="output-column">
+            <h3>Player</h3>
+            <div class="player-box">
+              <video id="recordedVideo" controls controlslist="nodownload" playsinline preload="metadata"></video>
+              <div class="seek-row">
+                <span id="seekNow">00:00</span>
+                <input id="seekSlider" type="range" min="0" max="0" step="0.1" value="0" disabled />
+                <span id="seekEnd">00:00</span>
+              </div>
+            </div>
+            <div class="file-list" id="fileList"></div>
+          </section>
+
+          <section class="output-column">
+            <h3>Transcript</h3>
+            <div class="transcript-actions">
+              <button id="copyTranscriptBtn" type="button" disabled>Copy text</button>
+              <button id="downloadTranscriptBtn" type="button" disabled>Download transcript</button>
+            </div>
+            <div class="transcript-box" id="transcriptBox">
+              <p>No transcript yet.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="log-panel">
+        <div class="panel-head compact">
+          <div>
+            <h2>Session log</h2>
+            <p>Capture status, warnings, and export events.</p>
+          </div>
+        </div>
+        <div class="log-list" id="logList"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
